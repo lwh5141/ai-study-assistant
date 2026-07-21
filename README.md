@@ -210,7 +210,6 @@ npm run dev
 │
 ├── docs/                               # 项目文档
 ├── start.bat                           # Windows 一键启动脚本
-├── install_hybrid_deps.bat             # 混合检索依赖安装脚本
 ├── rebuild_venv.bat                    # 重建虚拟环境脚本
 └── package.json                        # 前端依赖
 ```
@@ -338,7 +337,7 @@ PaddleOCR 是可选功能。移除 `requirements.txt` 中的 `paddlepaddle`、`p
 <details>
 <summary><b>混合检索依赖未安装（jieba / rank-bm25）</b></summary>
 
-双击 `install_hybrid_deps.bat`，或手动：
+这两个包已在 `requirements.txt` 中，`start.bat` 第 4 步自动安装。如需手动安装：
 
 ```bash
 cd backend && .venv\Scripts\activate && pip install jieba rank-bm25
