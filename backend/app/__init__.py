@@ -37,6 +37,23 @@ def _setup_logging(app: Flask):
     app.logger.info('日志系统初始化完成，级别=%s', logging.getLevelName(level))
 
 
+def _validate_production_config(app: Flask):
+    """生产环境强制校验：禁止 CORS 全开放和默认 SECRET_KEY"""
+    if app.config.get('DEBUG', False) or app.config.get('TESTING', False):
+        return  # 开发/测试环境跳过
+
+    errors = []
+    if app.config.get('CORS_ORIGINS') == ['*']:
+        errors.append('生产环境不允许 CORS_ORIGINS="*"，请在 .env 中配置具体白名单（如 http://localhost:5173）')
+    if app.config.get('SECRET_KEY') == 'dev-secret-change-in-production':
+        errors.append('生产环境必须设置 SECRET_KEY 环境变量')
+
+    if errors:
+        for msg in errors:
+            app.logger.error(msg)
+        raise ValueError('\n'.join(errors))
+
+
 def create_app(config_name: str | None = None) -> Flask:
     app = Flask(__name__)
 
@@ -45,6 +62,9 @@ def create_app(config_name: str | None = None) -> Flask:
 
     # 初始化日志（必须在其他操作之前）
     _setup_logging(app)
+
+    # 生产环境安全检查
+    _validate_production_config(app)
 
     # 初始化扩展
     db.init_app(app)

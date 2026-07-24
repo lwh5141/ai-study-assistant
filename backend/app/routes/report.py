@@ -239,6 +239,17 @@ def download_report(report_id: str):
 
 # ---- 系统设置 ----
 
+# 前端设置键 → Flask config 键映射
+_SETTING_KEY_MAP: dict[str, str] = {
+    'llm_provider': 'LLM_PROVIDER',
+    'llm_model': 'LLM_MODEL_NAME',
+    'embedding_model': 'EMBEDDING_MODEL_NAME',
+    'chunk_size': 'CHUNK_SIZE',
+    'chunk_overlap': 'CHUNK_OVERLAP',
+    'top_k_default': 'TOP_K_DEFAULT',
+}
+
+
 @report_bp.route('/settings', methods=['GET'])
 def get_settings():
     return json_response(code=0, data={
@@ -254,13 +265,34 @@ def get_settings():
 @report_bp.route('/settings', methods=['PUT'])
 def update_settings():
     data = request.get_json(silent=True) or {}
-    for key, value in data.items():
-        setting = Setting.query.get(key)
+
+    for setting_key, config_key in _SETTING_KEY_MAP.items():
+        if setting_key not in data:
+            continue
+        value = data[setting_key]
+
+        # 类型转换：chunk_size/chunk_overlap/top_k_default 为整数
+        if config_key in ('CHUNK_SIZE', 'CHUNK_OVERLAP', 'TOP_K_DEFAULT'):
+            value = int(value)
+
+        # 写入 Setting 表（持久化供启动时加载）
+        setting = Setting.query.get(setting_key)
         if setting:
             setting.value = str(value)
         else:
-            db.session.add(Setting(key=key, value=str(value)))
+            db.session.add(Setting(key=setting_key, value=str(value)))
+
+        # 同步更新运行时配置
+        current_app.config[config_key] = value
+
     db.session.commit()
+
+    # 重置 LLM / Embedding 客户端缓存，使新配置立即生效
+    from ..services.llm import reset_client as reset_llm_client
+    from ..services.embedding import reset_globals as reset_embedding_globals
+    reset_llm_client()
+    reset_embedding_globals()
+
     return get_settings()
 
 

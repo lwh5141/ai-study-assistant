@@ -24,6 +24,12 @@ def _get_client() -> OpenAI:
     return _llm_client
 
 
+def reset_client() -> None:
+    """重置 LLM 客户端缓存（配置变更后调用）"""
+    global _llm_client
+    _llm_client = None
+
+
 # ---- 重试装饰器 ----
 
 def _retry(func, *args, max_retries: int = 3, **kwargs):

@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, ReactNode, cloneElement, isValidElement } from 'react'
+import { useState, useRef, useEffect, cloneElement, isValidElement } from 'react'
+import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 
@@ -89,7 +90,7 @@ export function SmartTooltip({
   // 注入事件到 children
   const childProps = children.props as Record<string, unknown>
   const enhancedChildren = isValidElement(children)
-    ? cloneElement(children, {
+    ? cloneElement(children as React.ReactElement<Record<string, unknown>>, {
         onMouseEnter: (e: React.MouseEvent) => {
           show(e.clientX, e.clientY)
           ;(childProps.onMouseEnter as ((e: React.MouseEvent) => void) | undefined)?.(e)

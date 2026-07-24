@@ -14,7 +14,7 @@ vectordb_bp = Blueprint('vectordb', __name__)
 def list_chunks():
     """分页获取知识块列表，支持按资料筛选和内容搜索"""
     page = request.args.get('page', 1, type=int)
-    page_size = request.args.get('page_size', 20, type=int)
+    page_size = max(1, min(request.args.get('page_size', 20, type=int), 100))
     document_id = request.args.get('document_id', '').strip()
     search = request.args.get('search', '').strip()
 

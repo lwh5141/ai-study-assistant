@@ -66,7 +66,7 @@ def _process_document_async(app, doc_id: str, file_path_str: str, file_type: str
             get_bm25_index().add_chunks(chunks)
 
         except Exception as e:
-            logger.error('文档解析流水线失败 (id=%s): %s', doc_id_from_thread, e, exc_info=True)
+            logger.error('文档解析流水线失败 (id=%s): %s', doc_id, e, exc_info=True)
             doc = Document.query.get(doc_id)
             if doc:
                 doc.status = 'error'
@@ -76,7 +76,7 @@ def _process_document_async(app, doc_id: str, file_path_str: str, file_type: str
 
 @documents_bp.route('/documents/upload', methods=['POST'])
 def upload_document():
-    """上传文件 → 异步流水线 → 立即返回"""
+    """上传文件 → 去重检查 → 异步流水线 → 立即返回"""
     if 'file' not in request.files:
         return json_response(code=1001, message='未上传文件', status=400)
 
@@ -86,6 +86,9 @@ def upload_document():
 
     if not allowed_file(file.filename):
         return json_response(code=1001, message=f'不支持的文件格式: {Path(file.filename).suffix}，仅支持 PDF/PPT/Word/MD/TXT', status=400)
+
+    # 读取覆盖参数
+    overwrite = request.form.get('overwrite', 'false').lower() == 'true'
 
     # 保存文件
     upload_folder = current_app.config.get('UPLOAD_FOLDER', 'backend/uploads')
@@ -98,6 +101,38 @@ def upload_document():
     file.save(save_path)
 
     file_size = os.path.getsize(save_path)
+    digest = file_hash(Path(save_path))
+
+    # ---- 去重检查 ----
+    existing = Document.query.filter_by(file_hash=digest).first()
+    if existing:
+        if not overwrite:
+            # 删除刚保存的重复文件
+            try:
+                os.remove(save_path)
+            except OSError:
+                pass
+            return json_response(
+                code=1003,
+                message=f'文件已存在（资料 ID: {existing.id}），如需覆盖请传 overwrite=true',
+                data=existing.to_dict(),
+                status=409,
+            )
+        else:
+            # 覆盖模式：删除旧文件、旧 chunks、旧向量
+            try:
+                if existing.file_path and os.path.exists(existing.file_path):
+                    os.remove(existing.file_path)
+            except OSError:
+                pass
+            try:
+                delete_by_document(existing.id)
+            except Exception:
+                pass
+            get_bm25_index().remove_by_document(existing.id)
+            Chunk.query.filter_by(document_id=existing.id).delete()
+            db.session.delete(existing)
+            db.session.commit()
 
     # 写入数据库
     doc = Document(
@@ -106,7 +141,7 @@ def upload_document():
         file_type=file_type,
         file_size=file_size,
         file_path=save_path,
-        file_hash=file_hash(Path(save_path)),
+        file_hash=digest,
         status='processing',
         chunk_count=0,
     )
@@ -129,7 +164,7 @@ def upload_document():
 def list_documents():
     """获取资料列表（分页）"""
     page = request.args.get('page', 1, type=int)
-    page_size = request.args.get('page_size', 20, type=int)
+    page_size = max(1, min(request.args.get('page_size', 20, type=int), 100))
     status_filter = request.args.get('status', '')
 
     query = Document.query
