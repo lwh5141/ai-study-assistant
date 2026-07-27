@@ -4,6 +4,7 @@ import { ChatMessage } from '@/components/chat/ChatMessage'
 import { ChatInput } from '@/components/chat/ChatInput'
 import { ConversationSidebar } from '@/components/chat/ConversationSidebar'
 import { DocumentMultiSelect } from '@/components/chat/DocumentMultiSelect'
+import { SessionDocInfo } from '@/components/chat/SessionDocInfo'
 import {
   getDocuments,
   getSession,
@@ -12,9 +13,22 @@ import {
   renameSession,
   sendMessageStream,
 } from '@/api/client'
-import type { Document, ChatSource, ChatSession, SendMessageResponse } from '@/types/api'
+import type { Document, ChatSource, ChatSession, ChatMessage as ChatMessageType, SendMessageResponse } from '@/types/api'
 
 const STORAGE_KEY = 'ai_study_session_id'
+
+/** 从消息列表的 sources 中提取去重后的资料 ID 列表（旧会话降级用） */
+function extractDocIdsFromSources(messages: ChatMessageType[]): string[] {
+  const ids = new Set<string>()
+  for (const msg of messages) {
+    if (msg.role === 'assistant' && msg.sources) {
+      for (const src of msg.sources) {
+        if (src.document_id) ids.add(src.document_id)
+      }
+    }
+  }
+  return Array.from(ids)
+}
 
 interface LocalMessage {
   id: string
@@ -80,12 +94,18 @@ export function StudyPage() {
           sources: m.sources as ChatSource[] | undefined,
         })),
       )
+      // 同步该会话引用的资料 ID（优先 document_ids，降级到 sources 提取）
+      const docIds = (data.document_ids && data.document_ids.length > 0)
+        ? data.document_ids
+        : extractDocIdsFromSources(data.messages || [])
+      setSelectedDocIds(docIds)
       localStorage.setItem(STORAGE_KEY, sid)
     } catch {
       // 会话已被删除或后端不可用
       localStorage.removeItem(STORAGE_KEY)
       setSessionId(null)
       setMessages([])
+      setSelectedDocIds([])
     } finally {
       setIsRestoring(false)
     }
@@ -333,6 +353,12 @@ export function StudyPage() {
               documents={documents}
               selectedIds={selectedDocIds}
               onChange={setSelectedDocIds}
+            />
+
+            {/* 当前对话引用资料信息 */}
+            <SessionDocInfo
+              documents={documents}
+              selectedIds={selectedDocIds}
             />
 
             {/* 新对话按钮 */}

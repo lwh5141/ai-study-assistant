@@ -74,6 +74,7 @@ export interface ChatMessage {
 export interface ChatSession {
   session_id: string
   title: string
+  document_ids: string[]
   message_count: number
   preview: string
   created_at: string
@@ -83,6 +84,7 @@ export interface ChatSession {
 export interface ChatSessionDetail {
   session_id: string
   title: string
+  document_ids: string[]
   messages: ChatMessage[]
 }
 

@@ -58,6 +58,11 @@ def send_message():
         content=message,
     )
     db.session.add(user_msg)
+
+    # 持久化该会话引用的资料 ID（新会话或资料变更时更新）
+    if document_ids is not None:
+        session.document_ids = json.dumps(document_ids, ensure_ascii=False)
+
     db.session.commit()
 
     # 提取 session_id 避免生成器内访问已断开的 ORM 对象
@@ -194,6 +199,7 @@ def get_session(session_id: str):
     return json_response(code=0, data={
         'session_id': session.id,
         'title': session.title,
+        'document_ids': json.loads(session.document_ids or '[]'),
         'messages': [m.to_dict() for m in messages],
     })
 

@@ -54,6 +54,27 @@ def _validate_production_config(app: Flask):
         raise ValueError('\n'.join(errors))
 
 
+def _run_migrations(app: Flask):
+    """轻量 schema 迁移 — 为已有数据库添加新列（SQLite ALTER TABLE 兼容）
+
+    使用 SQLAlchemy 原生连接执行，避免路径解析问题。
+    """
+    from sqlalchemy import text, inspect
+    try:
+        # 用 SQLAlchemy inspector 检查列是否存在（跨数据库兼容）
+        inspector = inspect(db.engine)
+        existing_cols = [col['name'] for col in inspector.get_columns('chat_sessions')]
+
+        if 'document_ids' not in existing_cols:
+            with db.engine.connect() as conn:
+                conn.execute(text("ALTER TABLE chat_sessions ADD COLUMN document_ids TEXT DEFAULT '[]'"))
+                conn.commit()
+            app.logger.info('✅ 迁移: chat_sessions 表已添加 document_ids 列')
+    except Exception as e:
+        # 不能静默失败 —— 记录完整错误信息
+        app.logger.error('❌ 数据库迁移失败 (document_ids 列): %s', e, exc_info=True)
+
+
 def create_app(config_name: str | None = None) -> Flask:
     app = Flask(__name__)
 
@@ -99,6 +120,9 @@ def create_app(config_name: str | None = None) -> Flask:
             KnowledgePoint, WeeklyReport, Setting
         )
         db.create_all()
+
+        # 数据库 schema 迁移（已有数据库升级用）
+        _run_migrations(app)
 
         # BM25 关键词索引初始化（从 SQLite chunks 表全量重建）
         try:

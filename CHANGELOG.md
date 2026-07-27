@@ -1,5 +1,65 @@
 # Changelog
 
+## v0.4.0 (2026-07-27)
+
+### 新增功能
+
+#### 会话引用资料信息展示框
+- 聊天页顶部工具栏新增 `SessionDocInfo` 组件，位于"选择资料"按钮与"新对话"按钮之间
+- 自动显示当前对话引用的资料名称、数量和类型标签
+- 无引用资料时显示虚线边框 `"无引用资料"` 占位提示
+- 多份资料时 hover tooltip 展示完整文件名列表
+- 组件：`src/components/chat/SessionDocInfo.tsx`（新建）
+- 后端 `ChatSession` 模型新增 `document_ids` TEXT 字段，发送消息时自动持久化
+- `_run_migrations()` 自动为已有数据库添加新列（SQLAlchemy inspect + text 实现）
+
+#### 历史对话资料降级提取
+- `extractDocIdsFromSources()` 工具函数：从 AI 消息的 `sources` 中提取去重资料 ID
+- `restoreSession()` 降级逻辑：优先用 `document_ids`，旧会话无此字段时自动从消息来源提取
+- 效果：创建此功能前的历史对话也能正确显示引用的资料信息
+
+### 功能优化
+
+#### 核心系统提示词重构
+- 4 个核心提示词按「角色 → 场景 → 任务 → 示例 → 约束」五段式结构重写：
+  - `TUTOR_SYSTEM_PROMPT`（RAG 导师对话）— 新增角色背景、成功/失败示例、红线/偏好约束
+  - `QUIZ_GENERATOR_PROMPT`（AI 出题）— 新增完整 JSON 示例及分析、质量自检清单
+  - `GRADER_PROMPT`（AI 判分）— 新增三档评分示例、边缘情况处理、判分风格偏好
+  - `REPORT_PROMPT`（周报生成）— 新增学习分析师定位、数据不足处理策略
+
+### Bug 修复
+
+#### 数据库迁移静默失败
+- 问题：`_run_migrations()` 使用裸 `sqlite3` 连接 + `except Exception` 吞掉所有错误，Windows 路径可能因反斜杠转义导致迁移失败
+- 修复：改用 SQLAlchemy `inspect` + `text()` 执行 ALTER TABLE，错误以 `app.logger.error` 输出完整堆栈
+
+#### 资料信息框在小屏幕隐藏
+- 问题：`SessionDocInfo` 使用 `hidden sm:flex`，< 640px 窗口完全不可见
+- 修复：有资料状态使用 `flex` 始终可见；无资料状态保留 `hidden sm:flex`
+
+#### restoreSession 异常未重置资料选择
+- 问题：catch 分支只重置 `sessionId` 和 `messages`，`selectedDocIds` 保留上一个会话的值
+- 修复：catch 分支新增 `setSelectedDocIds([])`
+
+### 文件清单
+
+```
+新建文件 (1):
+  src/components/chat/SessionDocInfo.tsx
+
+修改文件 (8):
+  backend/app/__init__.py              — 新增 _run_migrations()
+  backend/app/models/models.py         — ChatSession 新增 document_ids 字段 + json import
+  backend/app/routes/chat.py           — send_message 持久化 + get_session 返回 document_ids
+  backend/app/routes/quiz.py           — QUIZ_GENERATOR_PROMPT + GRADER_PROMPT 重构
+  backend/app/routes/report.py         — REPORT_PROMPT 重构
+  backend/app/services/rag.py          — TUTOR_SYSTEM_PROMPT 重构
+  src/pages/StudyPage.tsx              — SessionDocInfo 集成 + extractDocIdsFromSources + restoreSession 降级
+  src/types/api.ts                     — ChatSession / ChatSessionDetail 新增 document_ids
+```
+
+---
+
 ## v0.3.1 (2026-07-21)
 
 ### Bug 修复

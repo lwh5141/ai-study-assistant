@@ -1,5 +1,6 @@
 """数据库模型 — 10 张表，严格匹配 docs/requirements.md 三、数据库表设计"""
 
+import json
 import uuid
 from datetime import datetime, timezone
 from ..extensions import db
@@ -97,6 +98,7 @@ class ChatSession(db.Model):
 
     id = db.Column(db.Text, primary_key=True, default=lambda: _pk_uuid('sess_'))
     title = db.Column(db.Text, nullable=True, default='新对话')
+    document_ids = db.Column(db.Text, nullable=True, default='[]')  # JSON 数组，记录该会话引用的资料 ID
     created_at = db.Column(db.Text, nullable=False, default=_now)
     updated_at = db.Column(db.Text, nullable=False, default=_now, onupdate=_now)
 
@@ -114,9 +116,15 @@ class ChatSession(db.Model):
             .first()
         )
         preview = (first_msg.content[:60] + '…') if first_msg and len(first_msg.content) > 60 else (first_msg.content if first_msg else '')
+        # 解析 document_ids 为列表
+        try:
+            doc_ids = json.loads(self.document_ids or '[]')
+        except (json.JSONDecodeError, TypeError):
+            doc_ids = []
         return {
             'session_id': self.id,
             'title': self.title,
+            'document_ids': doc_ids,
             'message_count': self.messages.count(),
             'preview': preview,
             'created_at': self.created_at,
